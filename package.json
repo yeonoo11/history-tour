@@ -1,0 +1,12 @@
+{
+  "name": "sahak-history-tour",
+  "private": true,
+  "version": "1.0.0",
+  "description": "사학도생의 추천 역사투어 - 제주 역사문화 데이터 API + 지도",
+  "scripts": {
+    "dev": "node dev-server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

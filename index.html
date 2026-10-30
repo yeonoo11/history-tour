@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>사학도생의 추천 역사투어</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+  :root {
+    --paper: #f5efe3; --card: #fffdf8; --ink: #2b2118; --muted: #7a6b5a; --line: #e2d6c1;
+    --seal: #9b2c2c; --seal-soft: #f6e4df; --brass: #a97c2e; --ok: #2f7d4f;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #1a1612; --card: #241f19; --ink: #efe6d6; --muted: #a8998a; --line: #3a3228;
+      --seal: #e0675f; --seal-soft: #3a2420; --brass: #d3a64f; --ok: #5fc08a;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); line-height: 1.6;
+    font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', system-ui, sans-serif; }
+  h1, h2, h3, .serif { font-family: 'Batang', 'Nanum Myeongjo', 'Noto Serif KR', serif; }
+  button { font: inherit; color: inherit; }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 2px solid var(--seal); outline-offset: 2px; }
+
+  .top { max-width: 1280px; margin: 0 auto; padding: 1.2rem 1rem 0.4rem; display: flex; gap: 0.9rem; align-items: center; }
+  .seal { flex: none; width: 3.2rem; height: 3.2rem; display: grid; place-items: center; border-radius: 8px;
+    background: var(--seal); color: #fff; font-size: 1.9rem; font-family: 'Batang', serif; transform: rotate(-4deg);
+    box-shadow: 0 2px 0 rgba(0,0,0,.2); }
+  .top h1 { margin: 0; font-size: 1.6rem; line-height: 1.2; }
+  .top p { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.9rem; }
+
+  .tabs { max-width: 1280px; margin: 0.6rem auto 0; padding: 0 1rem; display: flex; gap: 0.4rem; border-bottom: 1px solid var(--line); }
+  .tab { cursor: pointer; background: none; border: 0; padding: 0.6em 1em; border-bottom: 3px solid transparent;
+    color: var(--muted); font-weight: 700; }
+  .tab[aria-selected="true"] { color: var(--seal); border-bottom-color: var(--seal); }
+
+  .grid { max-width: 1280px; margin: 0 auto; padding: 1rem; display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 1.2rem; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } .mapcol { order: -1; } }
+  .mapcol { position: sticky; top: 0.6rem; }
+  @media (max-width: 860px) { .mapcol { position: static; } }
+  #map { width: 100%; height: calc(100vh - 8rem); min-height: 420px; border-radius: 14px; border: 1px solid var(--line); z-index: 0;
+    background: var(--card); }
+  @media (max-width: 860px) { #map { height: 320px; min-height: 0; } }
+  #map.nomap { display: grid; place-items: center; text-align: center; padding: 1rem; color: var(--muted); }
+  .legend { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.8rem; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 1rem 1.1rem; }
+
+  /* 코스 카드 */
+  .tours { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.8rem; }
+  .tourcard { text-align: left; cursor: pointer; background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 1rem; display: flex; flex-direction: column; gap: 0.35rem; }
+  .tourcard:hover { border-color: var(--seal); transform: translateY(-2px); }
+  .tourcard .ico { font-size: 1.8rem; line-height: 1; }
+  .tourcard h3 { margin: 0.2rem 0 0; font-size: 1.1rem; }
+  .tourcard .tl { color: var(--muted); font-size: 0.85rem; }
+  .meta { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.3rem; font-size: 0.78rem; }
+  .pill { padding: 0.05em 0.6em; border-radius: 999px; background: var(--seal-soft); color: var(--seal); }
+  .pill.plain { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+  .bar { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; margin-top: 0.4rem; }
+  .bar i { display: block; height: 100%; background: var(--ok); }
+  .lead { color: var(--muted); margin: 0 0 0.8rem; }
+
+  /* 코스 상세 */
+  .back { cursor: pointer; background: none; border: 0; color: var(--seal); padding: 0; margin-bottom: 0.5rem; font-weight: 700; }
+  .thead h2 { margin: 0.1rem 0 0.2rem; font-size: 1.4rem; }
+  .thead p { margin: 0.2rem 0 0.6rem; }
+  .stops { list-style: none; margin: 0.8rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+  .stop { display: grid; grid-template-columns: 2.2rem 1fr; gap: 0.7rem; background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 0.8rem 0.9rem; }
+  .stop.on { border-color: var(--seal); background: var(--seal-soft); }
+  .no { width: 2rem; height: 2rem; border-radius: 50%; background: var(--seal); color: #fff; display: grid; place-items: center;
+    font-weight: 700; font-size: 0.9rem; }
+  .stop.done .no { background: var(--ok); }
+  .stop h3 { margin: 0; font-size: 1.05rem; }
+  .stop h3 button { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; text-align: left; }
+  .stop h3 button:hover { color: var(--seal); text-decoration: underline; }
+  .leg { color: var(--muted); font-size: 0.78rem; }
+  .note { margin: 0.35rem 0; font-size: 0.92rem; }
+  .note b { color: var(--brass); }
+  .src { color: var(--muted); font-size: 0.78rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; align-items: center; }
+  .chk { cursor: pointer; padding: 0.25em 0.8em; border-radius: 999px; border: 1px solid var(--ok); background: none; color: var(--ok);
+    font-size: 0.82rem; }
+  .chk[aria-pressed="true"] { background: var(--ok); color: #fff; }
+  .lnk { font-size: 0.82rem; color: var(--seal); text-decoration: none; }
+  .lnk:hover { text-decoration: underline; }
+
+  /* 전체 탐색 */
+  .tool { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.7rem; }
+  .tool input, .tool select { font: inherit; padding: 0.5em 0.8em; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); }
+  .tool input { flex: 1 1 220px; min-width: 0; }
+  .count { color: var(--muted); font-size: 0.88rem; margin: 0 0 0.5rem; }
+  .count b { color: var(--ink); }
+  .list { display: flex; flex-direction: column; gap: 0.45rem; max-height: 68vh; overflow-y: auto; }
+  .item { text-align: left; cursor: pointer; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 0.6rem 0.8rem; }
+  .item:hover, .item.on { border-color: var(--seal); }
+  .item.on { background: var(--seal-soft); }
+  .item b { display: block; }
+  .item span { color: var(--muted); font-size: 0.82rem; }
+  mark { background: #ffe066; color: #000; border-radius: 3px; }
+  .empty { padding: 1.5rem; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; }
+  .detail { margin-top: 0.8rem; }
+  .detail h3 { margin: 0 0 0.2rem; }
+  .detail .body { margin-top: 0.5rem; font-size: 0.9rem; white-space: pre-wrap; max-height: 12em; overflow-y: auto; }
+  .inTours { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+  .inTours button { cursor: pointer; padding: 0.2em 0.8em; border-radius: 999px; border: 1px solid var(--seal); background: none; color: var(--seal); font-size: 0.82rem; }
+  .inTours button:hover { background: var(--seal); color: #fff; }
+
+  /* 지도 마커 */
+  .num, .pin { background: none; border: 0; }
+  .num b { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #9b2c2c; color: #fff;
+    border: 2px solid #fff; font-size: 0.9rem; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+  .num.done b { background: #2f7d4f; }
+  .num.sel b { transform: scale(1.25); }
+  .pin span { display: block; width: 22px; height: 22px; margin: 4px; background: #9b2c2c; border: 2px solid #fff;
+    border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 2px 5px rgba(0,0,0,.4); position: relative; }
+  .pin span::after { content: ''; position: absolute; width: 7px; height: 7px; border-radius: 50%; background: #fff; top: 5.5px; left: 5.5px; }
+  .pin.sel span { background: #a97c2e; transform: rotate(-45deg) scale(1.25); }
+  .pop h3 { margin: 0 0 0.15rem; font-size: 1rem; }
+  .pop p { margin: 0.2rem 0; font-size: 0.85rem; }
+  .pop .pa { color: #777; font-size: 0.78rem; }
+  footer { max-width: 1280px; margin: 0 auto; padding: 0.5rem 1rem 2rem; color: var(--muted); font-size: 0.78rem; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="seal" aria-hidden="true">史</div>
+  <div>
+    <h1>사학도생의 추천 역사투어</h1>
+    <p>제주 역사문화 데이터 120곳 중에서 사학도생이 직접 고른 테마 코스</p>
+  </div>
+</header>
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" id="tab-tours" aria-selected="true">📜 추천 코스</button>
+  <button class="tab" role="tab" id="tab-explore" aria-selected="false">🔎 전체 120곳 탐색</button>
+</div>
+
+<div class="grid">
+  <section id="panel" aria-live="polite"></section>
+  <div class="mapcol">
+    <div id="map" aria-label="제주 지도"></div>
+    <p class="legend" id="legend"></p>
+  </div>
+</div>
+<footer>
+  출처: 공공데이터포털 오픈API · 제주특별자치도 제주역사문화 일반정보·위치정보(기준일 2022-12-09). 코스 구성과 메모는 두 자료의 설명을 바탕으로 정리했어요.
+  ※ 장소명은 자료가 연결된 <b>위치</b>를, 제목은 그 위치에 붙은 <b>원자료</b>를 뜻해서 서로 다를 수 있어요.
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="tours.js"></script>
+<script>
+(function () {
+  'use strict';
+  var DATA = [], TOURS = window.JEJU_TOURS || [], byId = {};
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { mode: 'tours', tour: null, selected: null, q: '', cat: '', region: '', dir1: '' };
+
+  // ---------- 보조 ----------
+  function el(tag, props, kids) {
+    var e = document.createElement(tag);
+    for (var k in (props || {})) {
+      if (k === 'text') e.textContent = props[k];
+      else if (k === 'class') e.className = props[k];
+      else e.setAttribute(k, props[k]);
+    }
+    (kids || []).forEach(function (c) { if (c) e.appendChild(c); });
+    return e;
+  }
+  function dist(a, b) {
+    var R = 6371, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
+    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  function tourKm(t) {
+    var s = 0;
+    for (var i = 1; i < t.stops.length; i++) s += dist(byId[t.stops[i - 1].id], byId[t.stops[i].id]);
+    return s;
+  }
+  function excerpt(s, n) { s = (s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n) + '…' : s; }
+  function toursOf(id) { return TOURS.filter(function (t) { return t.stops.some(function (s) { return s.id === id; }); }); }
+  function tourById(id) { return TOURS.filter(function (t) { return t.id === id; })[0]; }
+  function safeUrl(u) { return /^https?:\/\//.test(u) ? u : ''; }
+
+  // ---------- 다녀온 곳 체크 (이 브라우저에만 저장) ----------
+  var VKEY = 'sahak.visited.v1', visited = {};
+  try { visited = JSON.parse(localStorage.getItem(VKEY) || '{}') || {}; } catch (e) { visited = {}; }
+  function saveVisited() { try { localStorage.setItem(VKEY, JSON.stringify(visited)); } catch (e) {} }
+  function doneCount(t) { return t.stops.filter(function (s) { return visited[s.id]; }).length; }
+
+  // ---------- 지도 ----------
+  var MAP = null, layer = null, markers = {};
+  function initMap() {
+    if (!window.L) {
+      $('map').className = 'nomap';
+      $('map').textContent = '지도를 불러오려면 인터넷 연결이 필요해요. 코스 목록과 메모는 그대로 볼 수 있어요.';
+      return;
+    }
+    MAP = L.map('map').setView([33.38, 126.55], 9);
+    // 지도 타일: 키가 필요 없는 Esri 월드 스트리트 맵
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 18,
+      attribution: 'Tiles © Esri — Source: Esri, DeLorme, NAVTEQ, USGS, HERE, OpenStreetMap contributors'
+    }).addTo(MAP);
+    layer = L.layerGroup().addTo(MAP);
+  }
+  function numIcon(n, done, sel) {
+    return L.divIcon({ className: 'num' + (done ? ' done' : '') + (sel ? ' sel' : ''), html: '<b>' + (done ? '✓' : n) + '</b>',
+      iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -16] });
+  }
+  function pinIcon(sel) {
+    return L.divIcon({ className: 'pin' + (sel ? ' sel' : ''), html: '<span></span>',
+      iconSize: [30, 34], iconAnchor: [15, 32], popupAnchor: [0, -28] });
+  }
+
+  // ---------- 추천 코스 ----------
+  function renderTourList() {
+    var p = $('panel'); p.textContent = '';
+    p.appendChild(el('p', { class: 'lead', text: '제주 역사문화 120곳을 주제별로 엮은 6개 코스예요. 코스를 고르면 지도에 번호와 선으로 동선이 그려져요.' }));
+    var grid = el('div', { class: 'tours' });
+    TOURS.forEach(function (t) {
+      var done = doneCount(t), n = t.stops.length;
+      var c = el('button', { class: 'tourcard', type: 'button' }, [
+        el('span', { class: 'ico', text: t.icon }),
+        el('h3', { text: t.title }),
+        el('span', { class: 'tl', text: t.tagline }),
+        el('div', { class: 'meta' }, [
+          el('span', { class: 'pill', text: t.era }),
+          el('span', { class: 'pill plain', text: n + '곳' }),
+          el('span', { class: 'pill plain', text: '직선 약 ' + tourKm(t).toFixed(0) + 'km' })
+        ]),
+        el('div', { class: 'bar', 'aria-hidden': 'true' }, [(function () { var i = el('i'); i.style.width = (done / n * 100) + '%'; return i; })()]),
+        el('span', { class: 'src', text: '다녀온 곳 ' + done + ' / ' + n })
+      ]);
+      c.addEventListener('click', function () { openTour(t.id); });
+      grid.appendChild(c);
+    });
+    p.appendChild(grid);
+    if (layer) layer.clearLayers();
+    markers = {};
+    if (MAP) MAP.setView([33.38, 126.55], 9);
+    $('legend').textContent = '코스를 고르면 지도에 방문 순서가 표시돼요.';
+  }
+
+  function openTour(id) {
+    state.tour = id; state.selected = null;
+    renderTour(true);
+  }
+
+  function renderTour(fit) {
+    var t = tourById(state.tour), p = $('panel'); p.textContent = '';
+    var back = el('button', { class: 'back', type: 'button', text: '← 코스 목록' });
+    back.addEventListener('click', function () { state.tour = null; state.selected = null; renderTourList(); });
+    var done = doneCount(t), n = t.stops.length;
+    p.appendChild(back);
+    p.appendChild(el('div', { class: 'card thead' }, [
+      el('span', { class: 'pill', text: t.icon + ' ' + t.era }),
+      el('h2', { text: t.title }),
+      el('p', { text: t.intro }),
+      el('div', { class: 'meta' }, [
+        el('span', { class: 'pill plain', text: n + '곳' }),
+        el('span', { class: 'pill plain', text: '직선 합계 약 ' + tourKm(t).toFixed(1) + 'km' }),
+        el('span', { class: 'pill plain', text: '다녀온 곳 ' + done + ' / ' + n })
+      ]),
+      el('div', { class: 'bar', 'aria-hidden': 'true' }, [(function () { var i = el('i'); i.style.width = (done / n * 100) + '%'; return i; })()])
+    ]));
+
+    var ol = el('ol', { class: 'stops' });
+    t.stops.forEach(function (s, i) {
+      var d = byId[s.id]; if (!d) return;
+      var isDone = !!visited[s.id];
+      var title = el('h3'); var tb = el('button', { type: 'button', text: d.name });
+      tb.addEventListener('click', function () { focusStop(s.id); });
+      title.appendChild(tb);
+      var chk = el('button', { class: 'chk', type: 'button', 'aria-pressed': String(isDone), text: isDone ? '✓ 다녀왔어요' : '다녀왔어요' });
+      chk.addEventListener('click', function () { visited[s.id] = !visited[s.id]; if (!visited[s.id]) delete visited[s.id]; saveVisited(); renderTour(false); });
+      var link = safeUrl(d.url) ? el('a', { class: 'lnk', href: d.url, target: '_blank', rel: 'noopener noreferrer', text: '제주도 원문 ↗' }) : null;
+      var li = el('li', { class: 'stop' + (isDone ? ' done' : '') + (state.selected === s.id ? ' on' : ''), 'data-id': s.id }, [
+        el('span', { class: 'no', text: isDone ? '✓' : String(i + 1) }),
+        el('div', {}, [
+          title,
+          i > 0 ? el('div', { class: 'leg', text: '앞 장소에서 직선 약 ' + dist(byId[t.stops[i - 1].id], d).toFixed(1) + 'km · ' + d.address }) : el('div', { class: 'leg', text: '출발 · ' + d.address }),
+          el('p', { class: 'note' }, [el('b', { text: '사학도생 메모 ' }), document.createTextNode(s.note)]),
+          el('div', { class: 'src', text: '원자료: ' + (d.title || '') + (d.type ? ' (' + d.type + (d.date ? ', ' + d.date : '') + ')' : '') }),
+          el('div', { class: 'row' }, [chk, link])
+        ])
+      ]);
+      ol.appendChild(li);
+    });
+    p.appendChild(ol);
+    drawTour(t, fit);
+  }
+
+  function stopPopup(t, s, i) {
+    var d = byId[s.id];
+    return el('div', { class: 'pop' }, [
+      el('h3', { text: (i + 1) + '. ' + d.name }),
+      el('p', { text: excerpt(s.note, 110) }),
+      el('p', { class: 'pa', text: '📍 ' + d.address })
+    ]);
+  }
+  function drawTour(t, fit) {
+    $('legend').textContent = '● 번호는 방문 순서, 점선은 이동 동선(직선)이에요. 다녀온 곳은 초록색 ✓로 바뀌어요.';
+    if (!MAP) return;
+    layer.clearLayers(); markers = {};
+    var pts = [];
+    t.stops.forEach(function (s, i) {
+      var d = byId[s.id]; if (!d) return;
+      var ll = [d.lat, d.lon]; pts.push(ll);
+      var m = L.marker(ll, { icon: numIcon(i + 1, visited[s.id], state.selected === s.id), title: d.name });
+      m.bindPopup(function () { return stopPopup(t, s, i); }, { maxWidth: 260 });
+      m.on('click', function () { markSelected(s.id); });
+      markers[s.id] = m; layer.addLayer(m);
+    });
+    layer.addLayer(L.polyline(pts, { color: '#9b2c2c', weight: 4, opacity: 0.85, dashArray: '8 8' }));
+    if (fit) MAP.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 13 });
+  }
+  function markSelected(id) {
+    state.selected = id;
+    document.querySelectorAll('.stop').forEach(function (li) {
+      li.classList.toggle('on', Number(li.getAttribute('data-id')) === id);
+    });
+    var li = document.querySelector('.stop[data-id="' + id + '"]');
+    if (li) li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    var t = tourById(state.tour);
+    if (MAP && t) t.stops.forEach(function (s, i) {
+      if (markers[s.id]) markers[s.id].setIcon(numIcon(i + 1, visited[s.id], s.id === id));
+    });
+  }
+  function focusStop(id) {
+    markSelected(id);
+    var m = markers[id];
+    if (MAP && m) { MAP.setView(m.getLatLng(), Math.max(MAP.getZoom(), 12)); m.openPopup(); }
+  }
+
+  // ---------- 전체 탐색 ----------
+  function haystack(d) {
+    return [d.name, d.title, d.subtitle, d.subject, d.address, d.dir1, d.dir2, d.content].join(' ').toLowerCase();
+  }
+  function filtered() {
+    var q = state.q.trim().toLowerCase();
+    return DATA.filter(function (d) {
+      if (state.cat && d.category !== state.cat) return false;
+      if (state.region && d.address.split(' ')[0] !== state.region) return false;
+      if (q && haystack(d).indexOf(q) === -1) return false;
+      return true;
+    }).sort(function (a, b) { return a.id - b.id; });
+  }
+  function uniq(fn) {
+    var seen = {}, out = [];
+    DATA.forEach(function (d) { var v = fn(d); if (v && !seen[v]) { seen[v] = 1; out.push(v); } });
+    return out;
+  }
+  var lastKey = null;
+  function renderExplore(forceFit) {
+    var p = $('panel');
+    // 입력창을 다시 만들면 포커스가 사라지므로, 한 번만 만들고 목록만 갱신해요.
+    if (!p.querySelector('.tool')) {
+      p.textContent = '';
+      var q = el('input', { type: 'search', id: 'q', placeholder: '장소, 제목, 주소, 내용으로 검색 (예: 해녀, 성, 동굴)', 'aria-label': '검색' });
+      var cat = el('select', { id: 'cat', 'aria-label': '분류' }, [el('option', { value: '', text: '분류 전체' })]);
+      uniq(function (d) { return d.category; }).forEach(function (v) { cat.appendChild(el('option', { value: v, text: v })); });
+      var reg = el('select', { id: 'region', 'aria-label': '지역' }, [el('option', { value: '', text: '지역 전체' })]);
+      uniq(function (d) { return d.address.split(' ')[0]; }).forEach(function (v) { reg.appendChild(el('option', { value: v, text: v })); });
+      q.addEventListener('input', function () { state.q = q.value; renderExplore(true); });
+      cat.addEventListener('change', function () { state.cat = cat.value; renderExplore(true); });
+      reg.addEventListener('change', function () { state.region = reg.value; renderExplore(true); });
+      p.appendChild(el('div', { class: 'tool' }, [q, cat, reg]));
+      p.appendChild(el('p', { class: 'count', id: 'count' }));
+      p.appendChild(el('div', { class: 'list', id: 'list' }));
+      p.appendChild(el('div', { class: 'detail card', id: 'detail', hidden: '' }));
+    }
+    var rows = filtered(), n = rows.length;
+    var count = $('count'); count.textContent = '';
+    count.appendChild(document.createTextNode('전체 ' + DATA.length + '곳 중 '));
+    count.appendChild(el('b', { text: n + '곳' }));
+    count.appendChild(document.createTextNode(' · 지도에 핀으로 표시돼요'));
+    var list = $('list'); list.textContent = '';
+    if (!n) list.appendChild(el('div', { class: 'empty', text: '조건에 맞는 장소가 없어요.' }));
+    rows.forEach(function (d) {
+      var it = el('button', { class: 'item' + (state.selected === d.id ? ' on' : ''), type: 'button', 'data-id': d.id }, [
+        el('b', { text: d.name }),
+        el('span', { text: (d.title || '') + ' · ' + d.address.split(' ').slice(0, 2).join(' ') })
+      ]);
+      it.addEventListener('click', function () { selectPlace(d.id, true); });
+      list.appendChild(it);
+    });
+    drawExplore(rows, forceFit);
+    renderPlaceDetail();
+  }
+  function placePopup(d) {
+    var box = el('div', { class: 'pop' }, [
+      el('h3', { text: d.name }),
+      el('p', { text: d.title + (d.subtitle ? ' — ' + d.subtitle : '') }),
+      el('p', { text: excerpt(d.content || d.abstract, 160) }),
+      el('p', { class: 'pa', text: '📍 ' + d.address })
+    ]);
+    return box;
+  }
+  function drawExplore(rows, fit) {
+    $('legend').textContent = '📍 핀을 누르면 설명이 떠요. 검색·필터 결과만 핀으로 표시돼요.';
+    if (!MAP) return;
+    var key = rows.map(function (d) { return d.id; }).join(',');
+    if (key === lastKey && !fit) { updateSel(); return; }
+    layer.clearLayers(); markers = {}; lastKey = key;
+    rows.forEach(function (d) {
+      var m = L.marker([d.lat, d.lon], { icon: pinIcon(state.selected === d.id), title: d.name });
+      m.bindPopup(function () { return placePopup(d); }, { maxWidth: 270 });
+      m.on('click', function () { selectPlace(d.id, false); });
+      markers[d.id] = m; layer.addLayer(m);
+    });
+    if (rows.length && fit) MAP.fitBounds(L.latLngBounds(rows.map(function (d) { return [d.lat, d.lon]; })), { padding: [40, 40], maxZoom: 13 });
+  }
+  var prevSel = null;
+  function updateSel() {
+    if (markers[prevSel]) markers[prevSel].setIcon(pinIcon(false));
+    if (markers[state.selected]) markers[state.selected].setIcon(pinIcon(true));
+    prevSel = state.selected;
+  }
+  function selectPlace(id, fromList) {
+    state.selected = id;
+    document.querySelectorAll('.item').forEach(function (it) { it.classList.toggle('on', Number(it.getAttribute('data-id')) === id); });
+    updateSel(); renderPlaceDetail();
+    var m = markers[id];
+    if (fromList && MAP && m) { MAP.setView(m.getLatLng(), Math.max(MAP.getZoom(), 12)); m.openPopup(); }
+    if (!fromList) { var it = document.querySelector('.item[data-id="' + id + '"]'); if (it) it.scrollIntoView({ block: 'nearest' }); }
+  }
+  function renderPlaceDetail() {
+    var box = $('detail'); if (!box) return;
+    var d = byId[state.selected];
+    if (!d) { box.hidden = true; return; }
+    box.hidden = false; box.textContent = '';
+    box.appendChild(el('h3', { text: d.name }));
+    box.appendChild(el('div', { class: 'src', text: [d.category, d.dir1, d.dir2].filter(Boolean).join(' › ') + ' · ' + d.address }));
+    box.appendChild(el('p', { class: 'note', text: d.title + (d.subtitle ? ' — ' + d.subtitle : '') }));
+    var body = d.content || d.abstract;
+    if (body) box.appendChild(el('div', { class: 'body', text: body }));
+    var inT = toursOf(d.id);
+    if (inT.length) {
+      var wrap = el('div', { class: 'inTours' }, [el('span', { class: 'src', text: '추천 코스에 포함:' })]);
+      inT.forEach(function (t) {
+        var b = el('button', { type: 'button', text: t.icon + ' ' + t.title });
+        b.addEventListener('click', function () { setMode('tours'); openTour(t.id); focusStop(d.id); });
+        wrap.appendChild(b);
+      });
+      box.appendChild(wrap);
+    }
+    if (safeUrl(d.url)) box.appendChild(el('div', { class: 'row' }, [el('a', { class: 'lnk', href: d.url, target: '_blank', rel: 'noopener noreferrer', text: '제주도 원문 ↗' })]));
+  }
+
+  // ---------- 탭 ----------
+  function setMode(m) {
+    state.mode = m; state.selected = null; prevSel = null; lastKey = null;
+    $('tab-tours').setAttribute('aria-selected', String(m === 'tours'));
+    $('tab-explore').setAttribute('aria-selected', String(m === 'explore'));
+    $('panel').textContent = '';
+    if (layer) layer.clearLayers();
+    markers = {};
+    if (m === 'tours') { if (state.tour) renderTour(true); else renderTourList(); }
+    else renderExplore(true);
+  }
+  $('tab-tours').addEventListener('click', function () { setMode('tours'); });
+  $('tab-explore').addEventListener('click', function () { setMode('explore'); });
+
+  initMap();
+  $('panel').appendChild(el('p', { class: 'lead', text: '공공데이터포털에서 데이터를 불러오는 중이에요…' }));
+  // 데이터는 서버 API(/api/places)가 공공데이터포털 오픈API 2개를 호출해 합쳐서 돌려줘요. 인증키는 브라우저에 없어요.
+  fetch('/api/places')
+    .then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok) throw new Error(j.error || ('서버 응답 오류 (HTTP ' + r.status + ')'));
+        return j;
+      });
+    })
+    .then(function (res) {
+      DATA = res.items || [];
+      DATA.forEach(function (d) { byId[d.id] = d; });
+      if (!DATA.length) throw new Error('받아온 데이터가 비어 있어요.');
+      setMode('tours');
+    })
+    .catch(function (e) {
+      $('panel').textContent = '';
+      $('panel').appendChild(el('div', { class: 'empty', text: '데이터를 불러오지 못했어요. ' + e.message }));
+    });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+# 키가 들어 있는 파일은 절대 GitHub 에 올리지 않아요
+.env
+.env.*
+!.env.example
+
+node_modules
+.vercel
+.DS_Store
